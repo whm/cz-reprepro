@@ -1,0 +1,101 @@
+#!/bin/bash
+#
+# File: cz-reprepro-upload - update reprepro managed repository
+#
+# Author: Bill MacAllister <bill@ca-zephyr.org>
+# Copyright: 2015-2020 Bill MacAllister
+
+function display_usage {
+    echo "Usage: cz-reprepro-upload help|upload|listkeys"
+    exit 1
+}
+
+case $1 in
+    help)
+        display_usage
+        ;;
+    listkeys)
+        gpg --list-keys
+        ;;
+    manual)
+        pod2text $0
+        ;;
+    upload)
+        if [ "$2" = "" ]
+        then
+            echo "ERRROR: missing repostory name"
+            display_usage
+        fi
+        /usr/bin/reprepro-upload $1
+        ;;
+    *)
+        echo "ERROR: unknown command $1"
+        display_usage
+        ;;
+esac
+
+exit
+
+__END__
+
+##############################################################################
+# Documentation
+##############################################################################
+
+=head1 NAME
+
+cz-reprepro-upload - Wrapper around reprepro upload operation
+
+=head1 SYNOPSIS
+
+cz-reprepro-upload upload|listkeys|help|manual
+
+=head1 DESCRIPTION
+
+This is a trivial script that runs 'reprepro upload'.  It is intended
+to be use after uploading new packages.  It is intented to be called from
+dput using remctl.  For example:
+
+    post_upload_command = remctl repo.domain.com upload <repo name>
+
+=head1 COMMANDS
+
+=over 4
+
+=item upload <repo name>
+
+Execute the command 'reprepro-upload <repo name>'.
+
+=item listkeys
+
+List the repository keys on the server.
+that we support.
+
+=item help
+
+Display a brief help message.
+
+=item manual
+
+Display this text.
+
+=back
+
+=head1 LICENSE
+
+Copyright 2015-2020 Bill MacAllister <bill@ca-zephyr.org> These
+programs are free software; you may redistribute them and/or modify
+them under the same terms as Perl itself.  This means that you may
+choose between the two licenses that Perl is released under: the GNU
+GPL and the Artistic License.  Please see your Perl distribution for
+the details and copies of the licenses.
+
+=head1 AUTHORS
+
+Bill MacAllister <bill@ca-zephyr.org>
+
+=head1 SEE ALSO
+
+reprepro(1), reprepro-upload(1), reprepro-backend(1)
+
+=cut

@@ -1,0 +1,4 @@
+# Debian repository operations usng remctl
+
+reprepro ALL /usr/bin/reprepro-backend /etc/remctl/acl/dev-team
+

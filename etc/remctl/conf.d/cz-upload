@@ -1,0 +1,3 @@
+# Debian reprepro upload script
+
+cz-upload ALL /usr/bin/cz-reprepro-upload /etc/remctl/acl/dev-team
