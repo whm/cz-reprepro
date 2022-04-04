@@ -28,22 +28,30 @@ else
     REPREPRO_REPO="$2"
 fi
 
+repoPath="$REPREPRO_BASE/$REPREPRO_REPO"
+
 case $1 in
     help)
         display_usage
         ;;
     listkeys)
+        GNUPGHOME="$repoPath/keyring"
+        export GNUPGHOME
+        echo "$GNUPGHOME public keys"
         gpg --list-keys
+        echo "$GNUPGHOME secret keys"
+        gpg --list-secret-keys
+        export GNUPGHOME=""
         ;;
     manual)
         pod2text $0
         ;;
     upload)
-        repoPath="$REPREPRO_BASE/$REPREPRO_REPO"
         GNUPGHOME="$repoPath/keyring"
         export GNUPGHOME
         reprepro -b $repoPath processincoming default
         reprepro -b $repoPath pull
+        export GNUPGHOME=""
         ;;
     *)
         echo "ERROR: unknown command $1"
