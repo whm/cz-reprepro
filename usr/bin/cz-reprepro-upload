@@ -3,12 +3,30 @@
 # File: cz-reprepro-upload - update reprepro managed repository
 #
 # Author: Bill MacAllister <bill@ca-zephyr.org>
-# Copyright: 2015-2020 Bill MacAllister
+# Copyright: 2015-2022 Bill MacAllister
 
 function display_usage {
     echo "Usage: cz-reprepro-upload help|upload|listkeys"
     exit 1
 }
+
+if [ -e /etc/cz-reprepro-upload ]
+then
+    source /etc/cz-reprepro-upload
+fi
+if [ "$REPREPRO_BASE" = "" ]
+then
+    REPREPRO_BASE="/afs/@cell/public/repo"
+fi
+if [ "$2" = "" ]
+then
+    if [ "$REPREPRO_REPO" = "" ]
+    then
+        REPREPRO_REPO="ca-zephyr"
+    fi
+else
+    REPREPRO_REPO="$2"
+fi
 
 case $1 in
     help)
@@ -21,12 +39,11 @@ case $1 in
         pod2text $0
         ;;
     upload)
-        if [ "$2" = "" ]
-        then
-            echo "ERRROR: missing repostory name"
-            display_usage
-        fi
-        /usr/bin/reprepro-upload $1
+        repoPath="$REPREPRO_BASE/$REPREPRO_REPO"
+        GNUPGHOME="$repoPath/keyring"
+        export GNUPGHOME
+        reprepro -b $repoPath processincoming default
+        reprepro -b $repoPath pull
         ;;
     *)
         echo "ERROR: unknown command $1"
@@ -48,23 +65,30 @@ cz-reprepro-upload - Wrapper around reprepro upload operation
 
 =head1 SYNOPSIS
 
-cz-reprepro-upload upload|listkeys|help|manual
+cz-reprepro-upload upload|listkeys|help|manual [<distribution name>]
 
 =head1 DESCRIPTION
 
-This is a trivial script that runs 'reprepro upload'.  It is intended
-to be use after uploading new packages.  It is intented to be called from
-dput using remctl.  For example:
+This is a trivial script that runs the reprepro 'processincoming' and
+'pull' commands.  The script is intended to be used either as a remctl
+target or as a local execution specified in a .dput.conf configuration
+file.
 
-    post_upload_command = remctl repo.domain.com upload <repo name>
+The environment variables REPREPRO_BASE and REPREPRO_REPO can be used
+to specify the location of the reprepro installation and the
+distribution.  If not specified the defaults are
+'/afs/@cell/public/repo' and 'ca-zephyr' respectively.  The script
+will source the file /etc/cz-reprepro-upload if it exists.
+
 
 =head1 COMMANDS
 
 =over 4
 
-=item upload <repo name>
+=item upload [<distribution name>]
 
-Execute the command 'reprepro-upload <repo name>'.
+Execute the command the reprepro commands 'processincoming' and 'pull'
+on the specified repository.
 
 =item listkeys
 
@@ -81,9 +105,32 @@ Display this text.
 
 =back
 
+=head1 EXAMPLES
+
+=head2 Local Access to the Repository
+
+The following ~/.dput.cf file is an example a updating reprepro
+structures using the post processing of dput when the reprepro
+distribution is accessible from the local system.
+
+    [cz-afs]
+    method = local
+    allowed_distributions = ^(stable|testing|unstable)$
+    incoming = /afs/@cell/public/repo/ca-zephyr/incoming
+    post_upload_command = /usr/bin/cz-reprepro-upload upload ca-zephyr
+
+=head2 SSH/remctl Access to the Repository
+
+    [cz]
+    method = scp
+    fqdn = shelter-apt.ca-zephyr.internal
+    allowed_distributions = ^(unstable|testing|stable)$
+    incoming = /srv/repos/ca-zephyr/incoming
+    post_upload_command = remctl shelter-apt.ca-zephyr.internal cz-upload upload ca-zephyr
+
 =head1 LICENSE
 
-Copyright 2015-2020 Bill MacAllister <bill@ca-zephyr.org> These
+Copyright 2015-2022 Bill MacAllister <bill@ca-zephyr.org> These
 programs are free software; you may redistribute them and/or modify
 them under the same terms as Perl itself.  This means that you may
 choose between the two licenses that Perl is released under: the GNU
