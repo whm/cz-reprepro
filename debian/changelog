@@ -1,3 +1,12 @@
+cz-reprepro (3) unstable; urgency=medium
+
+  * Update the configuration file processing of cz-reprepro-upload to
+    allow the specification of the keyring directory.  This allows
+    the repository to be stored in AFS and the keys locally on the
+    repository server.
+
+ -- Bill MacAllister <bill@ca-zephyr.org>  Sun, 26 Apr 2022 11:43:00 +0000
+
 cz-reprepro (2) unstable; urgency=medium
 
   * Update to the reprepro upload wrapper to support local updates

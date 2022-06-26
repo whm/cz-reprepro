@@ -10,22 +10,29 @@ function display_usage {
     exit 1
 }
 
-if [ -e /etc/cz-reprepro-upload ]
+if [ "$REPREPRO_CONF" = "" ]
 then
-    source /etc/cz-reprepro-upload
+    REPREPRO_CONF="/etc/cz-reprepro-upload.conf"
 fi
+
+if [ -e $REPREPRO_CONF ]
+then
+    source $REPREPRO_CONF
+fi
+
 if [ "$REPREPRO_BASE" = "" ]
 then
     REPREPRO_BASE="/afs/@cell/public/repo"
 fi
-if [ "$2" = "" ]
+
+if [ "$REPREPRO_KEYRING" = "" ]
 then
-    if [ "$REPREPRO_REPO" = "" ]
-    then
-        REPREPRO_REPO="ca-zephyr"
-    fi
-else
-    REPREPRO_REPO="$2"
+    REPREPRO_KEYRING="/srv/repos/ca-zephyr/keyring"
+fi
+
+if [ "$REPREPRO_REPO" = "" ]
+then
+    REPREPRO_REPO="ca-zephyr"
 fi
 
 repoPath="$REPREPRO_BASE/$REPREPRO_REPO"
@@ -35,23 +42,22 @@ case $1 in
         display_usage
         ;;
     listkeys)
-        GNUPGHOME="$repoPath/keyring"
-        export GNUPGHOME
-        echo "$GNUPGHOME public keys"
-        gpg --list-keys
-        echo "$GNUPGHOME secret keys"
-        gpg --list-secret-keys
-        export GNUPGHOME=""
+        echo "keyring: $REPREPRO_KEYRING"
+        echo "Public keys"
+        gpg --homedir=$REPREPRO_KEYRING --list-keys
+        echo "Private keys"
+        gpg  --homedir=$REPREPRO_KEYRING --list-secret-keys
         ;;
     manual)
         pod2text $0
         ;;
     upload)
-        GNUPGHOME="$repoPath/keyring"
-        export GNUPGHOME
-        reprepro -b $repoPath processincoming default
-        reprepro -b $repoPath pull
-        export GNUPGHOME=""
+        reprepro -b $repoPath --gnupghome=$REPREPRO_KEYRING \
+		 processincoming default
+        reprepro -b $repoPath --gnupghome=$REPREPRO_KEYRING \
+		 pull
+	reprepro -b $repoPath --gnupghome=$REPREPRO_KEYRING \
+		 export
         ;;
     *)
         echo "ERROR: unknown command $1"
@@ -73,7 +79,7 @@ cz-reprepro-upload - Wrapper around reprepro upload operation
 
 =head1 SYNOPSIS
 
-cz-reprepro-upload upload|listkeys|help|manual [<distribution name>]
+cz-reprepro-upload upload|listkeys|help|manual
 
 =head1 DESCRIPTION
 
@@ -82,12 +88,10 @@ This is a trivial script that runs the reprepro 'processincoming' and
 target or as a local execution specified in a .dput.conf configuration
 file.
 
-The environment variables REPREPRO_BASE and REPREPRO_REPO can be used
-to specify the location of the reprepro installation and the
-distribution.  If not specified the defaults are
-'/afs/@cell/public/repo' and 'ca-zephyr' respectively.  The script
-will source the file /etc/cz-reprepro-upload if it exists.
-
+The script will source the file the configuration file if it exists.
+The environment variable REPREPRO_CONF can be used to override the
+location of the configuration file.  The default for REPREPRO_CONF is
+"/etc/cz-reprepro-upload.conf".
 
 =head1 COMMANDS
 
@@ -115,26 +119,53 @@ Display this text.
 
 =head1 EXAMPLES
 
+=head2 Configuration File
+
+        # file: /etc/cz-repreload-upload.conf
+        #
+        # The base directory of the repository
+        REPREPRO_BASE="/afs/@cell/public/repo"
+        #
+        # The home directory of the keyring for the repository
+        REPREPRO_KEYRING="/srv/repos/ca-zephyr/keyring"
+        #
+        # The name of the repository
+        REPREPRO_REPO="ca-zephyr"
+
 =head2 Local Access to the Repository
 
 The following ~/.dput.cf file is an example a updating reprepro
 structures using the post processing of dput when the reprepro
 distribution is accessible from the local system.
 
-    [cz-afs]
-    method = local
-    allowed_distributions = ^(stable|testing|unstable)$
-    incoming = /afs/@cell/public/repo/ca-zephyr/incoming
-    post_upload_command = /usr/bin/cz-reprepro-upload upload ca-zephyr
+        [cz-afs]
+        method = local
+        allowed_distributions = ^(stable|testing|unstable)$
+        incoming = /afs/@cell/public/repo/ca-zephyr/incoming
+        post_upload_command = /usr/bin/cz-reprepro-upload upload ca-zephyr
 
 =head2 SSH/remctl Access to the Repository
 
-    [cz]
-    method = scp
-    fqdn = shelter-apt.ca-zephyr.internal
-    allowed_distributions = ^(unstable|testing|stable)$
-    incoming = /srv/repos/ca-zephyr/incoming
-    post_upload_command = remctl shelter-apt.ca-zephyr.internal cz-upload upload ca-zephyr
+        [cz]
+        method = scp
+        fqdn = shelter-apt.ca-zephyr.internal
+        allowed_distributions = ^(unstable|testing|stable)$
+        incoming = /srv/repos/ca-zephyr/incoming
+        post_upload_command = remctl shelter cz-upload upload
+
+=head2 AFS Access to the Repository
+    
+Using AFS for repository storage presents the challenge that GPG appears
+prevent access to the GPG secret keys.  AFS can still be used to store
+the repository, but the GPG keys need to be on local disk and referenced
+using the configuration setting REPREPRO_KEYRING.  The dput.cf needs to
+specify remctl to perform the upload.
+
+        [cz-afs]
+        method = local
+        allowed_distributions = ^(stable|testing|unstable)$
+        incoming = /afs/@cell/public/repo/ca-zephyr/incoming
+        post_upload_command = krenew && remctl shelter-apt cz-upload upload
 
 =head1 LICENSE
 
