@@ -10,6 +10,8 @@
 # Written by Russ Allbery <rra@stanford.edu>
 # Copyright 2012, 2013
 #     The Board of Trustees of the Leland Stanford Junior University
+# Copyright 2022
+#     Bill MacAllister <bill@ca-zephyr.org>
 #
 # This program is free software; you may redistribute it and/or modify it
 # under the same terms as Perl itself.
@@ -28,18 +30,60 @@ use IPC::Run qw(run);
 use Net::Remctl::Backend;
 use Readonly;
 
+# Initialization
+my %CONF = ();
+$CONF{FILE} = '/etc/cz-reprepro-upload.conf';
+if ($ENV{REPREPRO_CONF}) {
+    $CONF{FILE} = $ENV{REPREPRO_CONF};
+}
+# Default properties
+my %VALID_CONF_VAR = (
+    'BASE'      => '/afs/@cell/public/repo',
+    'REPO'      => 'ca-zephyr',
+    'ARCHES'    => ('amd64'),
+    'CODENAMES' => ('buster', 'bullseye', 'sid'),
+);
+$VALID_CONF_VAR{'KEYRING'} = "/srv/repos/$VALID_CONF_VAR{'REPO'}/keyring";
+
+# Read the configuration file
+if ( -e $CONF{FILE}) {
+    open(my $fd, '<', $CONF{FILE}) or die "ERROR: problem opening $CONF{FILE}";
+    while (<>) {
+        chomp;
+        my $inline = $_;
+        if ($inline =~ /^REPREPRO\_(\w+)\s*=\s*(.*)/xms) {
+            my $a = $1;
+            my $v = $2;
+            if ($a eq 'ARCHES') {
+                @{ $CONF{$a} } = split /\s/, $v;
+                next;
+            }
+            if ($a eq 'CODENAMES') {
+                @{ $CONF{$a} } = split /\s/, $v;
+                next;
+            }
+            if ($VALID_CONF_VAR{$a}) {
+                $CONF{$a} = $v;
+            }
+        }
+    }
+}
+
 # Root path for the reprepro repositories.  This directory is expected to
 # contain directories for each repository, under which are the normal reprepro
 # directories including a keyring directory storing the GnuPG information.
-Readonly my $BASE => '/srv/repos';
+Readonly my $BASE => $CONF{'BASE'};
 
 # Supported architectures.
-Readonly my @ARCHITECTURES => qw(i386 amd64);
+Readonly my @ARCHITECTURES => @{ $CONF{'ARCHES'} };
 
 # Hash of codenames to their sort order, with highest being later.
-Readonly my @CODENAMES => qw(lenny squeeze wheezy jessie sid trusty);
+Readonly my @CODENAMES => @{ $CONF{'CODENAMES'} };
 my $i = 0;
 Readonly my %CODENAMES => map { $_ => $i++ } @CODENAMES;
+
+# The keyring location
+Readonly my $KEYRING => $CONF{'KEYRING'};
 
 # Help output, appended to the end of the normal Net::Remctl::Backend help.
 Readonly my $HELP => <<'EOH';
@@ -136,7 +180,7 @@ sub get_archives {
 sub exec_reprepro {
     my ($archive, @command) = @_;
     check_archive($archive);
-    local $ENV{GNUPGHOME} = "/srv/repos/$archive/keyring";
+    local $ENV{GNUPGHOME} = $CONF{'KEYRING'};
     @command = ('reprepro', '-b', "$BASE/$archive", @command);
     exec(@command) or die "$0: cannot run $command[0]: $!\n";
 }
@@ -152,7 +196,7 @@ sub exec_reprepro {
 sub reprepro_output {
     my ($archive, @command) = @_;
     check_archive($archive);
-    local $ENV{GNUPGHOME} = "/srv/repos/$archive/keyring";
+    local $ENV{GNUPGHOME} =  $CONF{'KEYRING'};
     @command = ('reprepro', '-b', "$BASE/$archive", @command);
     my $output;
     run(\@command, q{>}, \$output)
@@ -633,10 +677,11 @@ process of uploading.
 
 =head1 AUTHORS
 
-Russ Allbery <rra@stanford.edu>
+Russ Allbery <rra@stanford.edu>,
+Bill MacAllister <bill@ca-zephyr.org>
 
 =head1 SEE ALSO
 
-reprepro(1), reprepro-upload(1)
+reprepro(1), cz-reprepro-upload(1)
 
 =cut

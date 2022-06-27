@@ -53,11 +53,11 @@ case $1 in
         ;;
     upload)
         reprepro -b $repoPath --gnupghome=$REPREPRO_KEYRING \
-		 processincoming default
+                 processincoming default
         reprepro -b $repoPath --gnupghome=$REPREPRO_KEYRING \
-		 pull
-	reprepro -b $repoPath --gnupghome=$REPREPRO_KEYRING \
-		 export
+                 pull
+    reprepro -b $repoPath --gnupghome=$REPREPRO_KEYRING \
+         export
         ;;
     *)
         echo "ERROR: unknown command $1"

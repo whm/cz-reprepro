@@ -4,6 +4,8 @@ cz-reprepro (3) unstable; urgency=medium
     allow the specification of the keyring directory.  This allows
     the repository to be stored in AFS and the keys locally on the
     repository server.
+  * Update to backend-reprepro to support the cz-reprepro-upload
+    configuration file.
 
  -- Bill MacAllister <bill@ca-zephyr.org>  Sun, 26 Apr 2022 11:43:00 +0000
 
