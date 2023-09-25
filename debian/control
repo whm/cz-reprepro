@@ -6,7 +6,8 @@ Build-Depends: debhelper (>= 12),
  libipc-run-perl,
  libnet-remctl-perl,
  libreadonly-perl,
- perl
+ perl,
+ perl-doc
 Standards-Version: 4.1.2
 
 Package: cz-reprepro
