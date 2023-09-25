@@ -5,6 +5,7 @@ cz-reprepro (4) unstable; urgency=medium
   * Correct man page generation.
   * Make sure configuration file usage in cz-reprepro-upload and
     reprepro-backend is consistent.
+  * Bug fix in reprepro-backup parsing the configuration file.
 
  -- Bill MacAllister <bill@ca-zephyr.org>  Mon, 25 Sep 2023 19:08:09 +0000
 

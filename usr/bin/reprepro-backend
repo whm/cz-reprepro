@@ -48,7 +48,7 @@ $VALID_CONF_VAR{'KEYRING'} = "/srv/repos/$VALID_CONF_VAR{'REPO'}/keyring";
 # Read the configuration file
 if ( -e $CONF{FILE}) {
     open(my $fd, '<', $CONF{FILE}) or die "ERROR: problem opening $CONF{FILE}";
-    while (<>) {
+    while (<$fd>) {
         chomp;
         my $inline = $_;
         if ($inline =~ /^REPREPRO\_(\w+)\s*=\s*(.*)/xms) {
