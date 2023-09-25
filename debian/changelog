@@ -3,6 +3,8 @@ cz-reprepro (4) unstable; urgency=medium
   * Improve the support for repositories hosted in AFS in
     ca-reprepro-upload.
   * Correct man page generation.
+  * Make sure configuration file usage in cz-reprepro-upload and
+    reprepro-backend is consistent.
 
  -- Bill MacAllister <bill@ca-zephyr.org>  Mon, 25 Sep 2023 19:08:09 +0000
 

@@ -11,9 +11,9 @@ function display_usage {
 }
 
 # Read the configuration file
-if [ -e /etc/cz-reprepro-upload.conf ]
+if [ -e /etc/cz-reprepro.conf ]
 then
-    source /etc/cz-reprepro-upload.conf
+    source /etc/cz-reprepro.conf
 fi
 
 # Setup Kerberos if there is a keytab file
@@ -40,12 +40,12 @@ if [ "$REPREPRO_REPO" = "" ]
 then
     REPREPRO_REPO="repo"
 fi
+repoPath="$REPREPRO_BASE/$REPREPRO_REPO"
+
 if [ "$REPREPRO_KEYRING" = "" ]
 then
-    REPREPRO_KEYRING="$REPREPRO_BASE/$REPREPRO_REPO/keyring"
+    REPREPRO_KEYRING="$repoPath/keyring"
 fi
-
-repoPath="$REPREPRO_BASE/$REPREPRO_REPO"
 
 if [ -e $KRB_KEYTAB ]
 then
