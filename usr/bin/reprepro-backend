@@ -3,7 +3,7 @@
 # reprepro-backend -- Wrapper around reprepro operations.
 #
 # This script wraps reprepro, taking an initial argument specifying which
-# repository to operate on and setting up such things as GNUPGHOME and the
+# repository to operate on and setting up such things as GPG home and the
 # configuration path for reprepro and providing some standard operations.
 # It's meant to be used as a remctl backend.
 #
@@ -180,8 +180,10 @@ sub get_archives {
 sub exec_reprepro {
     my ($archive, @command) = @_;
     check_archive($archive);
-    local $ENV{GNUPGHOME} = $CONF{'KEYRING'};
-    @command = ('reprepro', '-b', "$BASE/$archive", @command);
+    @command = ('reprepro',
+                "--basedir=$BASE/$archive",
+                "--gnupghome=$CONF{'KEYRING'}",
+                @command);
     exec(@command) or die "$0: cannot run $command[0]: $!\n";
 }
 
@@ -196,8 +198,10 @@ sub exec_reprepro {
 sub reprepro_output {
     my ($archive, @command) = @_;
     check_archive($archive);
-    local $ENV{GNUPGHOME} =  $CONF{'KEYRING'};
-    @command = ('reprepro', '-b', "$BASE/$archive", @command);
+    @command = ('reprepro',
+                "--basedir=$BASE/$archive",
+                "--gnupghome=$CONF{'KEYRING'}",
+                @command);
     my $output;
     run(\@command, q{>}, \$output)
       or die "$0: reprepro failed with status ", ($? >> 8), "\n";

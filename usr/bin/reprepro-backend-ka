@@ -1,0 +1,71 @@
+#!/bin/bash
+#
+# File: reprepro-backend-krb - Kerberos wrapper for reprepro-backend
+#
+# Author: Bill MacAllister <bill@ca-zephyr.org>
+# Copyright: 2023 Bill MacAllister
+
+# Read the configuration file
+if [ -e /etc/cz-reprepro.conf ]
+then
+    source /etc/cz-reprepro.conf
+fi
+
+# Setup Kerberos if there is a keytab file
+if [ "$KRB_KEYTAB" = "" ]
+then
+    if [ -e /etc/krb5.keytab ]
+    then
+        KRB_KEYTAB=/etc/krb5.keytab
+    else
+        KRB_KEYTAB=/NOKEYTABSET
+    fi
+fi
+if [ "$KRB_TGT_FILE" = "" ]
+then
+    KRB_TGT_FILE="/run/reprepro.tgt"
+fi
+
+k5start -qtU -f $KRB_KEYTAB -k FILE:/$KRB_TGT_FILE
+reprepro-backend $*
+
+exit
+
+__END__
+
+##############################################################################
+# Documentation
+##############################################################################
+
+=head1 NAME
+
+reprepro-backend-ka - Wrapper reprepro-backend
+
+=head1 SYNOPSIS
+
+reprepro-backend-ka
+
+=head1 DESCRIPTION
+
+This is a trivial script creates a ticket cache, set an AFS token,
+and executes reprepre-backend.  This allows reprepro-backend to
+be used with repositories that are hosted on AFS volumes.
+
+=head1 LICENSE
+
+Copyright 2023 Bill MacAllister <bill@ca-zephyr.org> These
+programs are free software; you may redistribute them and/or modify
+them under the same terms as Perl itself.  This means that you may
+choose between the two licenses that Perl is released under: the GNU
+GPL and the Artistic License.  Please see your Perl distribution for
+the details and copies of the licenses.
+
+=head1 AUTHORS
+
+Bill MacAllister <bill@ca-zephyr.org>
+
+=head1 SEE ALSO
+
+reprepro(1), cz-reprepro-upload(1), reprepro-backend(1)
+
+=cut

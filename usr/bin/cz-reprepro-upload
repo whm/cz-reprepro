@@ -67,15 +67,15 @@ case $1 in
         pod2text $0
         ;;
     upload)
-	    echo "reprepro: processincoming ..."
+        echo "reprepro: processincoming ..."
         reprepro -b $repoPath --gnupghome=$REPREPRO_KEYRING \
-		         processincoming default
-	    echo "reprepro pull ..."
+                 processincoming default
+        echo "reprepro pull ..."
         reprepro -b $repoPath --gnupghome=$REPREPRO_KEYRING \
-		         pull
-	    echo "reprepro: export ..."
-	    reprepro -b $repoPath --gnupghome=$REPREPRO_KEYRING \
-		         export
+                 pull
+        echo "reprepro: export ..."
+        reprepro -b $repoPath --gnupghome=$REPREPRO_KEYRING \
+                 export
         ;;
     *)
         echo "ERROR: unknown command $1"
@@ -219,6 +219,7 @@ Bill MacAllister <bill@ca-zephyr.org>
 
 =head1 SEE ALSO
 
-reprepro(1), reprepro-upload(1), reprepro-backend(1)
+reprepro(1), cz-reprepro-upload(1), reprepro-backend(1),
+reprepro-backend-ka(1)
 
 =cut
