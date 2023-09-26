@@ -1,0 +1,691 @@
+#!/usr/bin/perl
+#
+# reprepro-backend -- Wrapper around reprepro operations.
+#
+# This script wraps reprepro, taking an initial argument specifying which
+# repository to operate on and setting up such things as GPG home and the
+# configuration path for reprepro and providing some standard operations.
+# It's meant to be used as a remctl backend.
+#
+# Written by Russ Allbery <rra@stanford.edu>
+# Copyright 2012, 2013
+#     The Board of Trustees of the Leland Stanford Junior University
+# Copyright 2022-2023
+#     Bill MacAllister <bill@ca-zephyr.org>
+#
+# This program is free software; you may redistribute it and/or modify it
+# under the same terms as Perl itself.
+
+##############################################################################
+# Modules and declarations
+##############################################################################
+
+use 5.010;
+use autodie;
+use strict;
+use warnings;
+
+use File::Basename qw(basename);
+use IPC::Run qw(run);
+use Net::Remctl::Backend;
+use Readonly;
+
+# Initialization
+my %CONF = ();
+$CONF{FILE} = '/etc/cz-reprepro.conf';
+if ($ENV{REPREPRO_CONF}) {
+    $CONF{FILE} = $ENV{REPREPRO_CONF};
+}
+# Default properties
+my %VALID_CONF_VAR = (
+    'BASE'      => '/afs/cell/public/repos',
+    'REPO'      => 'repository',
+    'ARCHES'    => ('amd64'),
+    'CODENAMES' => ('buster', 'bullseye', 'sid'),
+);
+$VALID_CONF_VAR{'KEYRING'} = "/srv/repos/$VALID_CONF_VAR{'REPO'}/keyring";
+
+# Read the configuration file
+if ( -e $CONF{FILE}) {
+    open(my $fd, '<', $CONF{FILE}) or die "ERROR: problem opening $CONF{FILE}";
+    while (<$fd>) {
+        chomp;
+        my $inline = $_;
+        if ($inline =~ /^REPREPRO\_(\w+)\s*=\s*(.*)/xms) {
+            my $a = $1;
+            my $v = $2;
+            if ($a eq 'ARCHES') {
+                @{ $CONF{$a} } = split /\s/, $v;
+                next;
+            }
+            if ($a eq 'CODENAMES') {
+                @{ $CONF{$a} } = split /\s/, $v;
+                next;
+            }
+            if ($VALID_CONF_VAR{$a}) {
+                $CONF{$a} = $v;
+            }
+        }
+    }
+}
+
+# Root path for the reprepro repositories.  This directory is expected to
+# contain directories for each repository, under which are the normal reprepro
+# directories including a keyring directory storing the GnuPG information.
+Readonly my $BASE => $CONF{'BASE'};
+
+# Supported architectures.
+Readonly my @ARCHITECTURES => @{ $CONF{'ARCHES'} };
+
+# Hash of codenames to their sort order, with highest being later.
+Readonly my @CODENAMES => @{ $CONF{'CODENAMES'} };
+my $i = 0;
+Readonly my %CODENAMES => map { $_ => $i++ } @CODENAMES;
+
+# The keyring location
+Readonly my $KEYRING => $CONF{'KEYRING'};
+
+# Help output, appended to the end of the normal Net::Remctl::Backend help.
+Readonly my $HELP => <<'EOH';
+The first argument to each command is the archive on which to operate,
+normally either "local" or "stanford".  A distribution is something like
+"unstable", "stable-email", or "squeeze".  Either distribution names or code
+names are allowed.
+
+Note that most of these actions operate on binary packages, not source
+packages, so (for example) if a package builds multiple binary packages and
+you want to copy all of them into a new distribution, you have to issue copy
+commands for each one.  The exception is the copysrc and removesrc commands,
+which operate on a source package and all binary packages built from that
+source package.  You normally want to use those commands when possible.
+EOH
+
+# Regex to parse an output line from reprepro list.
+Readonly my $REGEX_LIST => qr{
+    \A
+    [^|]+               # distribution
+    [|] [^|]+           # archive area
+    [|] ([^|]+):        # (1) architecture or "source"
+    \s* (\S+)           # (2) package name
+    \s+ (\S+)           # (3) package version
+    \z
+}xms;
+
+##############################################################################
+# Utility functions
+##############################################################################
+
+# This is a wrapper around print to properly do checking of whether the print
+# failed and die if so.  It's used since autodie doesn't check print, and we
+# should just in case of rare problems.
+#
+# @print - Array of items to give to print
+#
+# Returns: undef
+#  Throws: dies with text if cannot write to the filehandle
+sub print_stdout {
+    my (@print) = @_;
+    print {*STDOUT} @print
+      or die "$0: cannot write to standard output: $!\n";
+    return;
+}
+
+# This is a wrapper around say, to properly do checking of whether the say
+# failed and die if so.  It's used since autodie doesn't check say, and we
+# should just in case of rare problems.
+#
+# @print - Array of items to give to print
+#
+# Returns: undef
+#  Throws: dies with text if cannot write to the filehandle
+sub say_stdout {
+    my (@say) = @_;
+    say {*STDOUT} @say
+      or die "$0: cannot write to standard output: $!\n";
+    return;
+}
+
+# Check whether an archive name is valid.
+#
+# $archive - Name of a local archive
+#
+# Returns: undef
+#  Throws: Text exception if the archive name is not valid
+sub check_archive {
+    my ($archive) = @_;
+    if (!-d "$BASE/$archive" && !-d "$BASE/$archive/db") {
+        die "$0: invalid archive name $archive\n";
+    }
+    return;
+}
+
+# Get a list of all archives.
+#
+# Returns: All local archive names as a list
+#  Throws: autodie exception on I/O error
+sub get_archives {
+    opendir(my $basedir, $BASE);
+    my @archives = grep { !m{ \A [.] }xms } readdir($basedir);
+    closedir($basedir);
+    return @archives;
+}
+
+# Exec a reprepro command, sending its output and error to stdout and stderr.
+#
+# $archive - Archive on which to act
+# @command - All of the arguments to reprepro
+#
+# Returns: Does not return
+#  Throws: Text exception on any failure
+sub exec_reprepro {
+    my ($archive, @command) = @_;
+    check_archive($archive);
+    @command = ('reprepro',
+                "--basedir=$BASE/$archive",
+                "--gnupghome=$CONF{'KEYRING'}",
+                @command);
+    exec(@command) or die "$0: cannot run $command[0]: $!\n";
+}
+
+# Run reprepro and capture its standard output.  Dies on non-zero exit status.
+# Any error output is allowed to to go standard error.
+#
+# $archive - Archive on which to act
+# @command - All of the arguments to reprepro
+#
+# Returns: The standard output from reprepro
+#  Throws: Text exception on any failure
+sub reprepro_output {
+    my ($archive, @command) = @_;
+    check_archive($archive);
+    @command = ('reprepro',
+                "--basedir=$BASE/$archive",
+                "--gnupghome=$CONF{'KEYRING'}",
+                @command);
+    my $output;
+    run(\@command, q{>}, \$output)
+      or die "$0: reprepro failed with status ", ($? >> 8), "\n";
+    return $output;
+}
+
+# Compare two codenames in their sort order.
+#
+# $one  - First codename to compare
+# $two - Second codename to compare
+#
+# Returns: -1, 0, or 1 based on the inequality relationship
+## no critic (Subroutines::ProhibitSubroutinePrototypes)
+sub by_codename ( $$ ) {
+    my ($one, $two) = @_;
+    return $CODENAMES{$one} <=> $CODENAMES{$two};
+}
+## use critic
+
+# Read the results of reprepro list and parse them into a hash.  Does this for
+# every known codename.  Warns about any unrecognized line.
+#
+# $archive - Archive on which to operate
+#
+# Returns: Reference to a hash hash whose keys are the packages and whose
+#          values are anonymous arrays containing tuples of codename,
+#          architecture, and version.
+#  Throws: Text exception on any failure
+sub reprepro_list {
+    my ($archive) = @_;
+    my %list;
+    for my $codename (sort by_codename keys %CODENAMES) {
+        my $output = reprepro_output($archive, 'list', $codename);
+        for my $entry (split(m{\n}xms, $output)) {
+            if ($entry =~ $REGEX_LIST) {
+                my ($arch, $package, $version) = ($1, $2, $3);
+                $list{$package} ||= [];
+                push(@{ $list{$package} }, [$codename, $arch, $version]);
+            } else {
+                warn "$0: cannot parse line: $entry\n";
+            }
+        }
+    }
+    return \%list;
+}
+
+# Run rmadison for a list of packages in a given codename and the i386
+# architecture.  Fill in the Debian version as the third element of each
+# element of $needed.  Used to check whether we have packages in our local
+# archive that will never be used because they're older than what's in the
+# equivalent Debian archive.
+#
+# $codename - Archive codename on which to operate
+# $needed   - Reference to array whose first member is the package name
+#               (modified in place to add the Debian version as [2])
+#
+# Returns: undef
+#  Throws: Text exception on any failure
+sub rmadison_version {
+    my ($codename, $needed) = @_;
+    my @packages = map { $_->[0] } @{$needed};
+    my @command = ('rmadison', '-a', 'i386', '-s', $codename, @packages);
+
+    # Run the command and capture the output.
+    my $output;
+    run(\@command, q{>}, $output)
+      or die "$0: rmadison failed with status ", ($? >> 8), "\n";
+
+    # Process the output a line at a time, parsing for package and version.
+    # Ignore versions found in backports repositories.
+    my %versions;
+  LINE:
+    for my $line (split(m{\n}xms, $output)) {
+        next LINE if m{ [|] \s* \S+-backports }xms;
+        if ($line =~ m{ \A \s* (\S+) \s* [|] \s* (\S+) \s* [|] }xms) {
+            my ($package, $version) = ($1, $2);
+            $versions{$package} = $version;
+        }
+    }
+
+    # Stuff the versions found into the $needed array.
+    for my $needed (@{$needed}) {
+        my $package = $needed->[0];
+        if (defined($versions{$package})) {
+            $needed->[2] = $versions{$package};
+        }
+    }
+    return;
+}
+
+# Check whether one Debian version is greater than another.  We do this by
+# forking dpkg since the Debian version comparison algorithm is complex.
+#
+# $one - First version number to compare
+# $two - Second version number to compare
+#
+# Returns: True if one is > two, false otherwise
+sub version_gt {
+    my ($one, $two) = @_;
+    return system('dpkg', '--compare-versions', $one, 'gt', $two) == 0;
+}
+
+##############################################################################
+# Audits
+##############################################################################
+
+# Find packages that need to be built on some of our supported architectures
+# and print them to standard output.  Ignore codenames containing a hyphen,
+# since those are specialized repositories for particular services and aren't
+# built for all architectures.
+#
+# Returns: undef
+#  Throws: Text exception on any failure
+sub audit_build_needing {
+    my @archives = get_archives();
+    my $output;
+    for my $archive (@archives) {
+      CODENAME:
+        for my $codename (sort by_codename keys %CODENAMES) {
+            next CODENAME if $codename =~ m{-}xms;
+            for my $arch (@ARCHITECTURES) {
+                my @command = ($archive, 'build-needing', $codename, $arch);
+                my $needed = reprepro_output(@command);
+                if ($needed) {
+                    if ($output) {
+                        say_stdout(q{});
+                    }
+                    $output = 1;
+
+                    # Print a heading before each archive/codename/arch.
+                    say_stdout("$archive ($codename; $arch):");
+
+                    # Remove the *.dsc file paths from the output.
+                    $needed =~ s{ [ ] \S+ \n }{\n}xmsg;
+                    print_stdout($needed);
+                }
+            }
+        }
+    }
+    return;
+}
+
+# Find any package that exists in more than one of the repositories and print
+# the list to standard output.
+#
+# Returns: undef
+#  Throws: Text exception on any failure
+sub audit_multiple {
+    my @archives = get_archives;
+
+    # Build package lists for every archive.
+    my %lists;
+    for my $archive (@archives) {
+        $lists{$archive} = reprepro_list($archive);
+    }
+
+    # Walk through the packages in each archive and look for copies of that
+    # package in any archive that's later in the list.
+    for my $i (0 .. $#archives - 1) {
+        my $one = $archives[$i];
+        for my $package (sort keys %{ $lists{$one} }) {
+            for my $j ($i + 1 .. $#archives) {
+                my $two = $archives[$j];
+                if (defined($lists{$two}{$package})) {
+                    say_stdout("$package in $one and $two");
+                }
+            }
+        }
+    }
+    return;
+}
+
+# Find any package that's obsolete relative to Debian.  We only check against
+# the i386 version in Debian, and we also skip our service-specific
+# repositories for this check, since they may have special requirements.
+# There are a set of heuristics here to try to avoid needless work checking
+# Stanford-specific packages that are unlikely to be in the archive.
+#
+# Returns: undef
+#  Throws: Text exception on any failure
+sub audit_obsolete {
+    my @archives = get_archives;
+    my $space    = 0;
+    for my $archive (@archives) {
+        if ($space++) {
+            say_stdout(q{});
+        }
+        say_stdout("$archive:\n");
+
+        # Get the list of packages in our local archive.
+        my $list = reprepro_list($archive);
+
+        # Construct a list of packages for which we need Debian version
+        # information.  This will be a hash of local distribution codenames to
+        # anonymous arrays of package information.
+        my %needed;
+      PACKAGE:
+        for my $package (sort keys %{$list}) {
+            next PACKAGE if $package =~ m{ \A stanford }xms;
+            next PACKAGE if $package =~ m{ \A libstanford }xms;
+
+            # Build a list of codename and version tuples, sorted by codename,
+            # where the architecture is i386 and the local codename doesn't
+            # contain a hyphen.
+            my @info = sort { by_codename($a->[0], $b->[0]) }
+              grep { $_->[0] !~ m{-}xms && $_->[1] eq 'i386' }
+              @{ $list->{$package} };
+
+            # Rewrite that list into a hash of codenames to package and
+            # version tuples.
+            for my $info (@info) {
+                my ($codename, $version) = @{$info}[0, 2];
+                $needed{$codename} ||= [];
+                push(@{ $needed{$codename} }, [$package, $version]);
+            }
+        }
+
+        # Now, run rmadison for each package set for a given codename (it's
+        # very slow to start up, so we want to run it as few times as
+        # possible), filling in the Debian version into our hash.  Then, check
+        # to see if that version is greater than our current version.
+        for my $codename (sort by_codename keys %needed) {
+            rmadison_version($codename, $needed{$codename});
+            for my $info (@{ $needed{$codename} }) {
+                my ($package, $version, $debian) = @{$info};
+                if (defined($debian) && version_gt($debian, $version)) {
+                    my $details = "$package ($codename) $version";
+                    say_stdout("  $details (Debian $debian)");
+                }
+            }
+        }
+    }
+    return;
+}
+
+##############################################################################
+# Other reprepro commands
+##############################################################################
+
+# Clean files from the incoming directory.
+#
+# $archive - Archive on which to operate
+#
+# Returns: 0
+#  Throws: Text exception on error
+sub clean {
+    my ($archive) = @_;
+    opendir(my $incoming, "$BASE/$archive/incoming");
+    my @files = grep { !m{ \A [.] }xms } readdir($incoming);
+    closedir($incoming);
+    for my $file (@files) {
+        say_stdout("Removing incoming/$file");
+        unlink("$BASE/$archive/incoming/$file");
+    }
+    return 0;
+}
+
+# Implements a simple reprepro command.  Takes the command and the arguments,
+# which includes the archive as the first argument, and rearranges the
+# arguments to call exec_reprepro.
+#
+# $command - reprepro command to run
+# $archive - Archive on which to operate
+# @args    - Remaining arguments
+#
+# Returns: Does not return
+#  Throws: Text exception on error
+sub simple_command {
+    my ($command, $archive, @args) = @_;
+    return exec_reprepro($archive, $command, @args);
+}
+
+##############################################################################
+# Main routine
+##############################################################################
+
+# Set the executable name for error reporting.
+my $fullpath = $0;
+local $0 = basename($0);
+
+# Everything should be group-writable.
+umask(002);
+
+# The Net::Remctl::Backend configuration for our commands.
+my %commands = (
+    audit => {
+        nested => {
+            'build-needing' => {
+                args_max => 0,
+                code     => \&audit_build_needing,
+                summary  => 'Packages not built for an arch',
+                syntax   => q{},
+            },
+            multiple => {
+                args_max => 0,
+                code     => \&audit_multiple,
+                summary  => 'Packages in multiple archives',
+                syntax   => q{},
+            },
+            obsolete => {
+                args_max => 0,
+                code     => \&audit_obsolete,
+                summary  => 'Packages older than Debian',
+                syntax   => q{},
+            },
+        },
+    },
+    clean => {
+        args_min => 1,
+        args_max => 1,
+        code     => \&clean,
+        summary  => 'Clean incoming of failed files',
+        syntax   => '<archive>',
+    },
+    copy => {
+        args_min => 4,
+        code     => sub { simple_command('copy', @_) },
+        summary  => 'Copy <pkg> from <src> to <dst>',
+        syntax   => '<archive> <dst> <src> <pkg>',
+    },
+    copysrc => {
+        args_min => 4,
+        code     => sub { simple_command('copysrc', @_) },
+        summary  => 'Like copy but all of source',
+        syntax   => '<archive> <dst> <src> <pkg>',
+    },
+    list => {
+        args_min => 2,
+        args_max => 2,
+        code     => sub { simple_command('list', @_) },
+        summary  => 'List all packages in <dist>',
+        syntax   => '<archive> <dist>',
+    },
+    ls => {
+        args_min => 2,
+        args_max => 2,
+        code     => sub { simple_command('ls', @_) },
+        summary  => 'List all versions of <package>',
+        syntax   => '<archive> <package>',
+    },
+    pull => {
+        args_min => 1,
+        args_max => 2,
+        code     => sub { simple_command('pull', @_) },
+        summary  => 'Repull packages into <dist>',
+        syntax   => '<archive> [<dist>]',
+    },
+    remove => {
+        args_min => 3,
+        code     => sub { simple_command('remove', @_) },
+        summary  => 'Remove <package> from <dist>',
+        syntax   => '<archive> <dist> <package>',
+    },
+    removesrc => {
+        args_min => 3,
+        code     => sub { simple_command('removesrc', @_) },
+        summary  => 'Like remove but all of source',
+        syntax   => '<archive> <dist> <package>',
+    },
+);
+
+# Configure Net::Remctl::Backend.
+my $backend = Net::Remctl::Backend->new(
+    {
+        command     => 'reprepro',
+        commands    => \%commands,
+        help_banner => 'Debian repository remctl help:',
+    }
+);
+
+# Add a help command that appends $HELP to the normal help message.
+$commands{help} = {
+    args_max => 0,
+    code     => sub { print_stdout($backend->help, "\n", $HELP); exit(0) },
+};
+
+# Dispatch to the appropriate command.
+exit($backend->run);
+__END__
+
+##############################################################################
+# Documentation
+##############################################################################
+
+=for stopwords
+Allbery GnuPG reprepro-backend copysrc dest keyring removesrc reprepro
+Non-reprepro reprepro-managed reprepro-upload
+
+=head1 NAME
+
+reprepro-backend - Wrapper around reprepro operations
+
+=head1 SYNOPSIS
+
+B<reprepro-backend> audit (build-needing | multiple | obsolete)
+
+B<reprepro-backend> clean
+
+B<reprepro-backend> (copy | copysrc) I<archive> I<dest> I<source> I<package>
+
+B<reprepro-backend> help
+
+B<reprepro-backend> list I<archive> I<dist>
+
+B<reprepro-backend> ls I<archive> I<package>
+
+B<reprepro-backend> pull I<archive> [I<dist>]
+
+B<reprepro-backend> (remove | removesrc) I<archive> I<dist> I<package>
+
+=head1 DESCRIPTION
+
+B<reprepro-backend> is a wrapper around B<reprepro> that handles
+configuring the GnuPG keyring and passing the appropriate flags to
+B<reprepro> to specify the archive on which we're operating.  The first
+parameter after the command is always an archive name, which corresponds
+to a directory structure for a I<reprepro>-managed repository.  The other
+commands, except for C<audit>, C<clean>, and C<help>, are the same as the
+corresponding B<reprepro> commands and take the same arguments, which are
+passed verbatim to B<reprepro>.
+
+Non-B<reprepro> commands are:
+
+=over 4
+
+=item audit <audit>
+
+Run the audit <audit>.  Supported audits are:
+
+=over 4
+
+=item build-needing
+
+Report all packages that aren't built for one or more of the architectures
+that we support.
+
+=item multiple
+
+Report any packages that exist in multiple different archives.
+
+=item obsolete
+
+Report any packages whose version in our local repository is higher than
+the version in the corresponding suite in Debian.
+
+=back
+
+=item clean
+
+Removes all files from the incoming directory for the given I<archive>.
+This is used to clean up after a failed upload that won't be replaced by
+new files with the same names.
+
+=item help
+
+Display a summary of available commands.
+
+=back
+
+=head1 FILES
+
+=over 4
+
+=item F</srv/repos>
+
+The root of all the B<reprepro>-managed repositories.  Each repository as
+specified by the I<archive> option is expected to be a directory under
+here.
+
+=back
+
+=head1 BUGS
+
+The C<clean> command doesn't do any locking with the B<reprepro-upload>
+command and therefore could remove files that someone else was in the
+process of uploading.
+
+=head1 AUTHORS
+
+Russ Allbery <rra@stanford.edu>,
+Bill MacAllister <bill@ca-zephyr.org>
+
+=head1 SEE ALSO
+
+reprepro(1), cz-reprepro-upload(1)
+
+=cut

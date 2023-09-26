@@ -1,0 +1,24 @@
+Source: cz-reprepro
+Section: web
+Priority: optional
+Maintainer: Bill MacAllister <bill@ca-zephyr.org>
+Build-Depends: debhelper (>= 12),
+ libipc-run-perl,
+ libnet-remctl-perl,
+ libreadonly-perl,
+ perl,
+ perl-doc
+Standards-Version: 4.1.2
+
+Package: cz-reprepro
+Architecture: all
+Depends: ${misc:Depends},
+ libipc-run-perl,
+ libnet-remctl-perl,
+ libreadonly-perl,
+ perl,
+ remctl-client,
+ remctl-server
+Description: Reprepro remctl scripts
+ This set of scripts are using in conjunction with reprepro to allow
+ reprepro functions to be performed using remctl.

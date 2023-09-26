@@ -1,0 +1,225 @@
+#!/bin/bash
+#
+# File: cz-reprepro-upload - update reprepro managed repository
+#
+# Author: Bill MacAllister <bill@ca-zephyr.org>
+# Copyright: 2015-2023 Bill MacAllister
+
+function display_usage {
+    echo "Usage: cz-reprepro-upload help|upload|listkeys"
+    exit 1
+}
+
+# Read the configuration file
+if [ -e /etc/cz-reprepro.conf ]
+then
+    source /etc/cz-reprepro.conf
+fi
+
+# Setup Kerberos if there is a keytab file
+if [ "$KRB_KEYTAB" = "" ]
+then
+    if [ -e /etc/krb5.keytab ]
+    then
+        KRB_KEYTAB=/etc/krb5.keytab
+    else
+        KRB_KEYTAB=/NOKEYTABSET
+    fi
+fi
+if [ "$KRB_TGT_FILE" = "" ]
+then
+    KRB_TGT_FILE="/run/reprepro.tgt"
+fi
+
+# Setup reprepro locations
+if [ "$REPREPRO_BASE" = "" ]
+then
+    REPREPRO_BASE="/afs/cell/public"
+fi
+if [ "$REPREPRO_REPO" = "" ]
+then
+    REPREPRO_REPO="repo"
+fi
+repoPath="$REPREPRO_BASE/$REPREPRO_REPO"
+
+if [ "$REPREPRO_KEYRING" = "" ]
+then
+    REPREPRO_KEYRING="$repoPath/keyring"
+fi
+
+if [ -e $KRB_KEYTAB ]
+then
+    k5start -qtU -f $KRB_KEYTAB -k FILE:/$KRB_TGT_FILE
+fi
+
+case $1 in
+    help)
+        display_usage
+        ;;
+    listkeys)
+        echo "keyring: $REPREPRO_KEYRING"
+        echo "Public keys ================================="
+        gpg --homedir=$REPREPRO_KEYRING --list-keys
+        echo "Private keys ================================"
+        gpg --homedir=$REPREPRO_KEYRING --list-secret-keys
+        ;;
+    manual)
+        pod2text $0
+        ;;
+    upload)
+        echo "reprepro: processincoming ..."
+        reprepro -b $repoPath --gnupghome=$REPREPRO_KEYRING \
+                 processincoming default
+        echo "reprepro pull ..."
+        reprepro -b $repoPath --gnupghome=$REPREPRO_KEYRING \
+                 pull
+        echo "reprepro: export ..."
+        reprepro -b $repoPath --gnupghome=$REPREPRO_KEYRING \
+                 export
+        ;;
+    *)
+        echo "ERROR: unknown command $1"
+        display_usage
+        ;;
+esac
+
+exit
+
+__END__
+
+##############################################################################
+# Documentation
+##############################################################################
+
+=head1 NAME
+
+cz-reprepro-upload - Wrapper around reprepro upload operation
+
+=head1 SYNOPSIS
+
+cz-reprepro-upload upload|listkeys|help|manual
+
+=head1 DESCRIPTION
+
+This is a trivial script that runs the reprepro 'processincoming' and
+'pull' commands.  The script is intended to be used either as a remctl
+target or as a local execution specified in a .dput.conf configuration
+file.
+
+The configuration file, /etc/cz-reprepro-upload.conf, is a bash fragment
+that will be sourced if it exists.  The following variables are supported.
+
+=over 4
+
+=item KRB_KEYTAB
+
+The keytab to use to create a Kerberos ticket cache.  Defaults to
+"/etc/krb5.keytab".
+
+=item KRB_TGT_FILE
+
+The name to use for the ticket cache.  Defaults
+to "/run/reprepro.tgt".
+
+=item REPREPRO_BASE
+
+The path to the repository base.  Defaults to "/afs/cell/public".
+
+=item REPREPRO_REPO
+
+The directory holding the repository. Defaults to "repo".
+
+=item REPREPRO_KEYRING
+
+The path to the keyring directory.  This should be an absolute path.
+In the case of an AFS path aliases should not be used to reference
+the cell.  Defaults to "$REPREPRO_BASE/$REPREPRO_REPO/keyring".
+
+
+=back
+
+The environment variables REPREPRO_BASE and REPREPRO_REPO can be used
+to specify the location of the reprepro installation and the
+distribution.  If not specified the defaults are
+"/afs/cell/public" and "repo" respectively.  The script
+will source the file "/etc/cz-reprepro-upload.conf" if it exists.
+
+Note, gpg is quite fussy about paths and permissions.  The path
+to the repo should be specified as an absolute path.  In the case
+of an AFS hosted keyring the path should not use any AFS aliases.
+
+The script assumes that the repository is hosted on an AFS volume.
+This can be overridden in the configuration file by specifying
+"KRB_PREFIX=NONE".  The default for KRB_PREFIX is "k5start -qUtf
+/etc/krb5.keytab -U --".
+
+The location of the signing keys can be specified in the configuration
+file by setting the variable REPREPRO_KEYRING.  The default is
+"$REPREPRO_BASE/keyring".
+
+=head1 COMMANDS
+
+=over 4
+
+=item upload [<distribution name>]
+
+Execute the command the reprepro commands "processincoming" and "pull"
+on the specified repository.
+
+=item listkeys
+
+List the repository keys on the server.
+that we support.
+
+=item help
+
+Display a brief help message.
+
+=item manual
+
+Display this text.
+
+=back
+
+=head1 EXAMPLES
+
+=head2 Local Access to the Repository
+
+The following ~/.dput.cf file is an example a updating reprepro
+structures using the post processing of dput when the reprepro
+distribution is accessible from the local system.
+
+    [cz-afs]
+    method = local
+    allowed_distributions = ^(stable|testing|unstable)$
+    incoming = /afs/cell/public/repo/ca-zephyr/incoming
+    post_upload_command = /usr/bin/cz-reprepro-upload upload ca-zephyr
+
+=head2 SSH/remctl Access to the Repository
+
+    [cz]
+    method = scp
+    fqdn = shelter-apt.ca-zephyr.internal
+    allowed_distributions = ^(unstable|testing|stable)$
+    incoming = /srv/repos/ca-zephyr/incoming
+    post_upload_command = remctl repo.example.com cz-upload upload ca-zephyr
+
+=head1 LICENSE
+
+Copyright 2015-2023 Bill MacAllister <bill@ca-zephyr.org> These
+programs are free software; you may redistribute them and/or modify
+them under the same terms as Perl itself.  This means that you may
+choose between the two licenses that Perl is released under: the GNU
+GPL and the Artistic License.  Please see your Perl distribution for
+the details and copies of the licenses.
+
+=head1 AUTHORS
+
+Bill MacAllister <bill@ca-zephyr.org>
+
+=head1 SEE ALSO
+
+reprepro(1), cz-reprepro-upload(1), reprepro-backend(1),
+reprepro-backend-ka(1)
+
+=cut
