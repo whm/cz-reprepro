@@ -67,15 +67,19 @@ case $1 in
         pod2text $0
         ;;
     upload)
-        echo "reprepro: processincoming ..."
-        reprepro -b $repoPath --gnupghome=$REPREPRO_KEYRING \
-                 processincoming default
-        echo "reprepro pull ..."
-        reprepro -b $repoPath --gnupghome=$REPREPRO_KEYRING \
-                 pull
-        echo "reprepro: export ..."
-        reprepro -b $repoPath --gnupghome=$REPREPRO_KEYRING \
-                 export
+	cmd_base="reprepro -b $repoPath --gnupghome=$REPREPRO_KEYRING"
+
+	cmd="$cmd_base processincoming default"
+	echo "Executing $cmd"
+	$cmd
+
+	cmd="$cmd_base pull"
+	echo "Executing $cmd"
+	$cmd
+
+        cmd="$cmd_base export"
+	echo "Executing $cmd"
+	$cmd
         ;;
     *)
         echo "ERROR: unknown command $1"
