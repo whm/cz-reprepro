@@ -1,12 +1,12 @@
 #!/bin/bash
 #
-# File: cz-reprepro-upload - update reprepro managed repository
+# File: cz-reprepro - reprepro wrapper for AFS repositories
 #
 # Author: Bill MacAllister <bill@ca-zephyr.org>
-# Copyright: 2015-2023 Bill MacAllister
+# Copyright: 2024 CZ-Software
 
 function display_usage {
-    echo "Usage: cz-reprepro-upload help|upload|listkeys"
+    echo "Usage: cz-reprepro help|listkeys|upload|<reprepro command>"
     exit 1
 }
 
@@ -63,9 +63,6 @@ case $1 in
         echo "Private keys ================================"
         gpg --homedir=$REPREPRO_KEYRING --list-secret-keys
         ;;
-    manual)
-        pod2text $0
-        ;;
     upload)
 	cmd_base="reprepro -b $repoPath --gnupghome=$REPREPRO_KEYRING"
 
@@ -82,8 +79,11 @@ case $1 in
 	$cmd
         ;;
     *)
-        echo "ERROR: unknown command $1"
-        display_usage
+	cmd_base="reprepro -b $repoPath --gnupghome=$REPREPRO_KEYRING"
+
+	cmd="$cmd_base $*"
+	echo "Executing $cmd"
+	$cmd
         ;;
 esac
 
@@ -97,18 +97,17 @@ __END__
 
 =head1 NAME
 
-cz-reprepro-upload - Wrapper around reprepro upload operation
+cz-reprepro - Wrapper around reprepro operations
 
 =head1 SYNOPSIS
 
-cz-reprepro-upload upload|listkeys|help|manual
+cz-reprepro help|listkeys|upload|<reprepro command>
 
 =head1 DESCRIPTION
 
-This script is depreciated.  It functionality is available in the
-cz-reprepro script.
-
-This is a trivial script that runs the reprepro 'processincoming' and
+This script can be used to use reprepro against repositories stored
+on AFS volume.  The script also implements a short cut for uploading
+package into a repository that runs the reprepro 'processincoming' and
 'pull' commands.  The script is intended to be used either as a remctl
 target or as a local execution specified in a .dput.conf configuration
 file.
@@ -182,9 +181,10 @@ that we support.
 
 Display a brief help message.
 
-=item manual
+=item <rerepro commands and options>
 
-Display this text.
+Any command that is not upload, listkeys, or help is assumed to be
+a reprepro command and passed to reprepro.
 
 =back
 
@@ -213,12 +213,13 @@ distribution is accessible from the local system.
 
 =head1 LICENSE
 
-Copyright 2015-2024 Bill MacAllister <bill@ca-zephyr.org> These
-programs are free software; you may redistribute them and/or modify
-them under the same terms as Perl itself.  This means that you may
-choose between the two licenses that Perl is released under: the GNU
-GPL and the Artistic License.  Please see your Perl distribution for
-the details and copies of the licenses.
+Copyright 2024 CZ Software
+
+These programs are free software; you may redistribute them and/or
+modify them under the same terms as Perl itself.  This means that you
+may choose between the two licenses that Perl is released under: the
+GNU GPL and the Artistic License.  Please see your Perl distribution
+for the details and copies of the licenses.
 
 =head1 AUTHORS
 
@@ -226,7 +227,7 @@ Bill MacAllister <bill@ca-zephyr.org>
 
 =head1 SEE ALSO
 
-reprepro(1), cz-reprepro(1), reprepro-backend(1),
+reprepro(1), cz-reprepro-upload(1), reprepro-backend(1),
 reprepro-backend-ka(1)
 
 =cut

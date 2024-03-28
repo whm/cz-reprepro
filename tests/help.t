@@ -10,6 +10,7 @@ use Test::More qw( no_plan );
 
 # List of perl source files
 %script_list = ('usr/bin/reprepro-backend'   => '^Debian repository remctl',
+                'usr/bin/cz-reprepro'        => '^Usage',
                 'usr/bin/cz-reprepro-upload' => '^Usage',
 );
 
