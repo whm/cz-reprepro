@@ -1,3 +1,10 @@
+cz-reprepro (7) unstable; urgency=medium
+
+  * Bug fix in reprepro-backend processing of the configuration
+    property CODENAMES and ARCHES.
+
+ -- Bill MacAllister <bill@ca-zephyr.org>  Fri, 29 Mar 2024 00:31:06 +0000
+
 cz-reprepro (6) unstable; urgency=medium
 
   * Add the script cz-reprepro.  This script is a superset of the

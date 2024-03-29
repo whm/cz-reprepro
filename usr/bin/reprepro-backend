@@ -10,7 +10,7 @@
 # Written by Russ Allbery <rra@stanford.edu>
 # Copyright 2012, 2013
 #     The Board of Trustees of the Leland Stanford Junior University
-# Copyright 2022-2023
+# Copyright 2022-2024
 #     Bill MacAllister <bill@ca-zephyr.org>
 #
 # This program is free software; you may redistribute it and/or modify it
@@ -38,10 +38,10 @@ if ($ENV{REPREPRO_CONF}) {
 }
 # Default properties
 my %VALID_CONF_VAR = (
-    'BASE'      => '/afs/cell/public/repos',
+    'BASE'      => '/afs/@cell/public/repos',
     'REPO'      => 'repository',
     'ARCHES'    => ('amd64'),
-    'CODENAMES' => ('buster', 'bullseye', 'sid'),
+    'CODENAMES' => ('buster', 'bullseye', 'bookworm', 'trixie', 'sid'),
 );
 $VALID_CONF_VAR{'KEYRING'} = "/srv/repos/$VALID_CONF_VAR{'REPO'}/keyring";
 
@@ -55,11 +55,11 @@ if ( -e $CONF{FILE}) {
             my $a = $1;
             my $v = $2;
             if ($a eq 'ARCHES') {
-                @{ $CONF{$a} } = split /\s/, $v;
+                @{ $CONF{$a} } = split /,/, $v;
                 next;
             }
             if ($a eq 'CODENAMES') {
-                @{ $CONF{$a} } = split /\s/, $v;
+                @{ $CONF{$a} } = split /,/, $v;
                 next;
             }
             if ($VALID_CONF_VAR{$a}) {
@@ -661,17 +661,46 @@ Display a summary of available commands.
 
 =back
 
-=head1 FILES
+=head1 CONFIGURATION FILE
+
+The location of the repositories can be specified in the configuration
+file.  If the file /etc/cz-reprepro.conf exists it will be read.
+
+=head2 Configuration Properties
 
 =over 4
 
-=item F</srv/repos>
+=item BASE = <path>
 
-The root of all the B<reprepro>-managed repositories.  Each repository as
-specified by the I<archive> option is expected to be a directory under
-here.
+The base to the base of the Debian repostories.  The default is
+/afs/@cell/public/repos.
+
+=item REPO = <id>
+
+The directory that holds the keys for the repository.  The default
+is 'repository'.
+
+=item ARCHES = <comma separated list of architectures>
+
+The default is 'amd64'.
+
+=item CODENAMES = <comma separated list of codename>
+
+The default value is 'buster,bullseye,bookworm,trixie,sid'.
 
 =back
+
+=head2 Configuration Example
+
+      # file: /etc/cz-reprepro.conf
+      REPREPRO_BASE=/afs/ca-zephyr.org/public/repo
+      REPREPRO_REPO=ca-zephyr
+      REPREPRO_ARCHES=amd64
+      REPREPRO_CODENAMES=buster,bullseye,bookworm,trixie,sid
+      REPREPRO_KEYRING=/srv/repos/ca-zephyr/keyring
+      #
+      KRB_KEYTAB=/etc/krb5.keytab
+      KRB_TGT_FILE=/run/reprepro.tgt
 
 =head1 BUGS
 
