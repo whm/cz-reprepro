@@ -16,14 +16,18 @@ if [ "$KRB_KEYTAB" = "" ]
 then
     if [ -e /etc/krb5.keytab ]
     then
-        KRB_KEYTAB=/etc/krb5.keytab
+        export KRB_KEYTAB=/etc/krb5.keytab
     else
-        KRB_KEYTAB=/NOKEYTABSET
+        export KRB_KEYTAB=/NOKEYTABSET
     fi
 fi
 if [ "$KRB_TGT_FILE" = "" ]
 then
-    KRB_TGT_FILE="/run/reprepro.tgt"
+    export KRB_TGT_FILE="/run/reprepro.tgt"
+fi
+if [ ! "AFS_AKLOG" = "" ]
+then
+    export AKLOG="$AFS_AKLOG"
 fi
 
 k5start -qtU -f $KRB_KEYTAB -k FILE:/$KRB_TGT_FILE
