@@ -2,6 +2,8 @@ cz-reprepro (9) unstable; urgency=medium
 
   * Correct error in reprepro-backend-krb that was preventing the acquistion
     of an AFS token.
+  * Update  cz-reprepro-upload to generalize AFS support to utilitize kafs
+    in addition to OpenAFS and Auristor.
 
  -- Bill MacAllister <bill@ca-zephyr.org>  Mon, 10 Jun 2024 16:47:42 +0000
 

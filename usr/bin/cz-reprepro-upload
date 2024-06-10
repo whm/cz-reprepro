@@ -49,6 +49,19 @@ fi
 
 if [ -e $KRB_KEYTAB ]
 then
+    if [ -z "${AFS_AKLOG}" ]
+    then
+        for alogin in /usr/bin/aklog /usr/bin/aklog-kafs
+        do
+            if [ -e $alogin ]
+            then
+                export AKLOG=$alogin
+                break
+            fi
+        done
+    else
+        export AKLOG="$AFS_AKLOG"
+    fi
     k5start -qtU -f $KRB_KEYTAB -k FILE:/$KRB_TGT_FILE
 fi
 
