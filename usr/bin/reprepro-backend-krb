@@ -3,7 +3,7 @@
 # File: reprepro-backend-krb - Kerberos wrapper for reprepro-backend
 #
 # Author: Bill MacAllister <bill@ca-zephyr.org>
-# Copyright: 2023 Bill MacAllister
+# Copyright: 2023-2024 Bill MacAllister
 
 # Read the configuration file
 if [ -e /etc/cz-reprepro.conf ]
@@ -25,10 +25,29 @@ if [ "$KRB_TGT_FILE" = "" ]
 then
     export KRB_TGT_FILE="/run/reprepro.tgt"
 fi
-if [ ! "AFS_AKLOG" = "" ]
+
+if [ -z "${AFS_AKLOG}" ]
 then
+    for alogin in /usr/bin/aklog /usr/bin/aklog-kafs
+    do
+        if [ -e $alogin ]
+        then
+            export AKLOG=$alogin
+            break
+        fi
+    done
+else
     export AKLOG="$AFS_AKLOG"
 fi
+
+if [ -z "${AKLOG}" ]
+then
+    echo "ERROR: aklog or aklog-kafs not found"
+    exit 1
+else
+    echo "Using $AKLOG"
+fi
+   
 
 k5start -qtU -f $KRB_KEYTAB -k FILE:/$KRB_TGT_FILE
 reprepro-backend $*
@@ -57,7 +76,7 @@ be used with repositories that are hosted on AFS volumes.
 
 =head1 LICENSE
 
-Copyright 2023 Bill MacAllister <bill@ca-zephyr.org> These
+Copyright 2023-2024 Bill MacAllister <bill@ca-zephyr.org> These
 programs are free software; you may redistribute them and/or modify
 them under the same terms as Perl itself.  This means that you may
 choose between the two licenses that Perl is released under: the GNU
