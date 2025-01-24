@@ -1,3 +1,9 @@
+cz-reprepro (10) unstable; urgency=medium
+
+  * Bug fix in reprepro-backend-krb.
+
+ -- Bill MacAllister <bill@ca-zephyr.org>  Fri, 24 Jan 2025 23:51:49 +0000
+
 cz-reprepro (9) unstable; urgency=medium
 
   * Correct error in reprepro-backend-krb that was preventing the acquistion

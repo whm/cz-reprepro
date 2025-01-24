@@ -62,7 +62,7 @@ then
     else
         export AKLOG="$AFS_AKLOG"
     fi
-    k5start -qtU -f $KRB_KEYTAB -k FILE:/$KRB_TGT_FILE
+    krb_init="k5start -qtU -f $KRB_KEYTAB -- "
 fi
 
 case $1 in
@@ -80,7 +80,7 @@ case $1 in
         pod2text $0
         ;;
     upload)
-	cmd_base="reprepro -b $repoPath --gnupghome=$REPREPRO_KEYRING"
+	cmd_base="$krb_init reprepro -b $repoPath --gnupghome=$REPREPRO_KEYRING"
 
 	cmd="$cmd_base processincoming default"
 	echo "Executing $cmd"
