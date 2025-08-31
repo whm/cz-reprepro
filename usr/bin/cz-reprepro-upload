@@ -65,34 +65,56 @@ then
     krb_init="k5start -qtU -f $KRB_KEYTAB -- "
 fi
 
+gpg_kill="gpgconf --homedir=$REPREPRO_KEYRING --kill gpg-agent"
+
 case $1 in
     help)
         display_usage
         ;;
     listkeys)
+        gpg_base="gpg --homedir=$REPREPRO_KEYRING"
+        gpg_base+=' --batch --yes'
+        gpg_base+=' --pinentry-mode loopback'
+
         echo "keyring: $REPREPRO_KEYRING"
+        echo "Executing $gpg_kill"
+        $gpg_kill
+
+        echo ''
         echo "Public keys ================================="
-        gpg --homedir=$REPREPRO_KEYRING --list-keys
+        cmd="$gpg_base --list-keys"
+        echo "Executing: $cmd"
+        $cmd
+        echo "============================================="
+
+        echo ''
         echo "Private keys ================================"
-        gpg --homedir=$REPREPRO_KEYRING --list-secret-keys
+        cmd="$gpg_base --list-secret-keys"
+        echo "Executing: $cmd"
+        $cmd
+        echo "============================================="
         ;;
     manual)
         pod2text $0
         ;;
     upload)
-	cmd_base="$krb_init reprepro -b $repoPath --gnupghome=$REPREPRO_KEYRING"
+        cmd_base="$krb_init reprepro -b $repoPath "
+        cmd_base+="--gnupghome=$REPREPRO_KEYRING"
 
-	cmd="$cmd_base processincoming default"
-	echo "Executing $cmd"
-	$cmd
+        echo "Executing $gpg_kill"
+        $gpg_kill
 
-	cmd="$cmd_base pull"
-	echo "Executing $cmd"
-	$cmd
+        cmd="$cmd_base processincoming default"
+        echo "Executing $cmd"
+        $cmd
+
+        cmd="$cmd_base pull"
+        echo "Executing $cmd"
+        $cmd
 
         cmd="$cmd_base export"
-	echo "Executing $cmd"
-	$cmd
+        echo "Executing $cmd"
+        $cmd
         ;;
     *)
         echo "ERROR: unknown command $1"
@@ -162,7 +184,7 @@ The environment variables REPREPRO_BASE and REPREPRO_REPO can be used
 to specify the location of the reprepro installation and the
 distribution.  If not specified the defaults are
 "/afs/cell/public" and "repo" respectively.  The script
-will source the file "/etc/cz-reprepro-upload.conf" if it exists.
+will source the file "/etc/cz-reprepro.conf" if it exists.
 
 Note, gpg is quite fussy about paths and permissions.  The path
 to the repo should be specified as an absolute path.  In the case
@@ -226,7 +248,7 @@ distribution is accessible from the local system.
 
 =head1 LICENSE
 
-Copyright 2015-2024 Bill MacAllister <bill@ca-zephyr.org> These
+Copyright 2015-2025 Bill MacAllister <bill@ca-zephyr.org> These
 programs are free software; you may redistribute them and/or modify
 them under the same terms as Perl itself.  This means that you may
 choose between the two licenses that Perl is released under: the GNU
