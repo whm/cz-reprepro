@@ -89,7 +89,7 @@ case $1 in
 
         echo ''
         echo "Private keys ================================"
-        cmd="$gpg_base --list-secret-keys"
+        cmd="$krb_init $gpg_base --list-secret-keys"
         echo "Executing: $cmd"
         $cmd
         echo "============================================="

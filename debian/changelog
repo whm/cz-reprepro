@@ -1,3 +1,9 @@
+cz-reprepro (12) unstable; urgency=medium
+
+  * Bug fix to listkeys in cz-reprepro upload.
+
+ -- Bill MacAllister <bill@ca-zephyr.org>  Wed, 31 Dec 2025 09:12:48 +0000
+
 cz-reprepro (11) unstable; urgency=medium
 
   * More updates to gpg processing to work around the requirement
