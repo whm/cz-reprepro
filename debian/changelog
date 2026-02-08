@@ -1,3 +1,9 @@
+cz-reprepro (13) unstable; urgency=medium
+
+  * Improve operation of cz-reprepro-upload when run using remctl.
+
+ -- Bill MacAllister <bill@ca-zephyr.org>  Sun, 08 Feb 2026 21:45:57 +0000
+
 cz-reprepro (12) unstable; urgency=medium
 
   * Bug fix to listkeys in cz-reprepro upload.

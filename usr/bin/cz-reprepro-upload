@@ -3,7 +3,7 @@
 # File: cz-reprepro-upload - update reprepro managed repository
 #
 # Author: Bill MacAllister <bill@ca-zephyr.org>
-# Copyright: 2015-2023 Bill MacAllister
+# Copyright: 2015-2026 Bill MacAllister
 
 function display_usage {
     echo "Usage: cz-reprepro-upload help|upload|listkeys"
@@ -15,6 +15,10 @@ if [ -e /etc/cz-reprepro.conf ]
 then
     source /etc/cz-reprepro.conf
 fi
+
+# Set environment for remctl
+export HOME=/var/lib/reprepro
+export GPG_TTY=
 
 # Setup Kerberos if there is a keytab file
 if [ "$KRB_KEYTAB" = "" ]
@@ -28,8 +32,9 @@ then
 fi
 if [ "$KRB_TGT_FILE" = "" ]
 then
-    KRB_TGT_FILE="/run/reprepro.tgt"
+    KRB_TGT_FILE="/tmp/krb5cc_reprepro.tgt"
 fi
+export KRB5CCNAME=FILE:${KRB_TGT_FILE}
 
 # Setup reprepro locations
 if [ "$REPREPRO_BASE" = "" ]
@@ -46,6 +51,7 @@ if [ "$REPREPRO_KEYRING" = "" ]
 then
     REPREPRO_KEYRING="$repoPath/keyring"
 fi
+export GNUPGHOME=$REPREPRO_KEYRING
 
 if [ -e $KRB_KEYTAB ]
 then
@@ -161,7 +167,7 @@ The keytab to use to create a Kerberos ticket cache.  Defaults to
 =item KRB_TGT_FILE
 
 The name to use for the ticket cache.  Defaults
-to "/run/reprepro.tgt".
+to "/tmp/krb5cc_reprepro.tgt".
 
 =item REPREPRO_BASE
 
@@ -248,7 +254,7 @@ distribution is accessible from the local system.
 
 =head1 LICENSE
 
-Copyright 2015-2025 Bill MacAllister <bill@ca-zephyr.org> These
+Copyright 2015-2026 Bill MacAllister <bill@ca-zephyr.org> These
 programs are free software; you may redistribute them and/or modify
 them under the same terms as Perl itself.  This means that you may
 choose between the two licenses that Perl is released under: the GNU
