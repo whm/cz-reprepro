@@ -3,13 +3,17 @@
 # File: reprepro-backend-krb - Kerberos wrapper for reprepro-backend
 #
 # Author: Bill MacAllister <bill@ca-zephyr.org>
-# Copyright: 2023-2024 Bill MacAllister
+# Copyright: 2023-2026 Bill MacAllister
 
 # Read the configuration file
 if [ -e /etc/cz-reprepro.conf ]
 then
     source /etc/cz-reprepro.conf
 fi
+
+# Set environment for remctl execution
+export HOME=/var/lib/reprepro
+export GPG_TTY=
 
 # Setup Kerberos if there is a keytab file
 if [ "$KRB_KEYTAB" = "" ]
@@ -23,8 +27,9 @@ then
 fi
 if [ "$KRB_TGT_FILE" = "" ]
 then
-    export KRB_TGT_FILE="/run/reprepro.tgt"
+    export KRB_TGT_FILE="/tmp/krb5cc_reprepro.tgt"
 fi
+export KRB5CCNAME="FILE:$KRB_TGT_FILE"
 
 if [ -z "${AFS_AKLOG}" ]
 then
@@ -48,6 +53,22 @@ else
     echo "Using $AKLOG"
 fi
    
+# Setup reprepro locations
+if [ "$REPREPRO_BASE" = "" ]
+then
+    REPREPRO_BASE="/afs/cell/public"
+fi
+if [ "$REPREPRO_REPO" = "" ]
+then
+    REPREPRO_REPO="repo"
+fi
+repoPath="$REPREPRO_BASE/$REPREPRO_REPO"
+
+if [ "$REPREPRO_KEYRING" = "" ]
+then
+    REPREPRO_KEYRING="$repoPath/keyring"
+fi
+export GNUPGHOME=$REPREPRO_KEYRING
 
 k5start -qtU -f $KRB_KEYTAB -k FILE:/$KRB_TGT_FILE
 reprepro-backend $*
@@ -62,11 +83,11 @@ __END__
 
 =head1 NAME
 
-reprepro-backend-ka - Wrapper reprepro-backend
+reprepro-backend-krb - Wrapper reprepro-backend
 
 =head1 SYNOPSIS
 
-reprepro-backend-ka
+reprepro-backend-krb
 
 =head1 DESCRIPTION
 
@@ -76,7 +97,7 @@ be used with repositories that are hosted on AFS volumes.
 
 =head1 LICENSE
 
-Copyright 2023-2024 Bill MacAllister <bill@ca-zephyr.org> These
+Copyright 2023-2026 Bill MacAllister <bill@ca-zephyr.org> These
 programs are free software; you may redistribute them and/or modify
 them under the same terms as Perl itself.  This means that you may
 choose between the two licenses that Perl is released under: the GNU

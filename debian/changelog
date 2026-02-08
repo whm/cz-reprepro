@@ -1,3 +1,11 @@
+cz-reprepro (14) unstable; urgency=medium
+
+  * Update cz-reprepro to match cz-reprepro-upload environment
+    setup.  Specifically ensure that the environment settings
+    for remctl include enough to make gpg happy.
+
+ -- Bill MacAllister <bill@ca-zephyr.org>  Sun, 08 Feb 2026 22:40:52 +0000
+
 cz-reprepro (13) unstable; urgency=medium
 
   * Improve operation of cz-reprepro-upload when run using remctl.

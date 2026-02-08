@@ -16,7 +16,7 @@ then
     source /etc/cz-reprepro.conf
 fi
 
-# Set environment for remctl
+# Set environment for remctl execution
 export HOME=/var/lib/reprepro
 export GPG_TTY=
 
@@ -32,7 +32,7 @@ then
 fi
 if [ "$KRB_TGT_FILE" = "" ]
 then
-    KRB_TGT_FILE="/tmp/krb5cc_reprepro.tgt"
+    KRB_TGT_FILE="/tmp/krb5cc_reprepro_upload.tgt"
 fi
 export KRB5CCNAME=FILE:${KRB_TGT_FILE}
 
